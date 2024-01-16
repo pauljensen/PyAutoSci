@@ -13,7 +13,7 @@ myFactorSet.add_categorical(name="projectile", levels=["pingpong", "whiffle"])
 print("My factor set:", myFactorSet.factors)
 
 #maximin design plotting
-(encoded_matrix,decoded_matrix) = maxmimin_design(myFactorSet,20,iters=10000,plot_process=True)
+(encoded_matrix,decoded_matrix) = maximin_design(myFactorSet,20,iters=10000,plot_process=True)
 
 print("Encoded matrix maximin: \n", encoded_matrix)
 print("Decoded matrix maximin: \n", decoded_matrix)

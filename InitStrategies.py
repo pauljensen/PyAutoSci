@@ -260,7 +260,7 @@ Create a maximin design
 :param plot_process: whether or not to plot the average pairwise Euc distances over the iterations
 :return: a pandas dataframe where each row is a point in the maximin design
 """
-def maxmimin_design(factors,n,iters=100,plot_process=False):
+def maximin_design(factors,n,iters=100,plot_process=False):
 
     #for keeping track of the average pairwise Euclidean distances for plotting
     all_avg_pairwise_euc_dists = []
