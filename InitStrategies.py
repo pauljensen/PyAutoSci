@@ -133,7 +133,7 @@ def latin_hypercube_design(factors, n):
 
     num_dimensions = len(factors.factors)
     #call the library LHS function with the number of factors as the dimensions
-    LHS_object = LatinHypercube(num_dimensions)
+    LHS_object = LatinHypercube(num_dimensions,centered=True)
     LHS_samples_unrounded = LHS_object.random(n)
 
     #create a pandas dataframe out of this with column names
