@@ -18,5 +18,5 @@ def update_model(gp, X, y):
     gp.optimizer=None
 
     #fit the GP onto all the data and with no hyperparameter tuning
-    gp.fit(X,y)
+    gp.fit(all_X,all_y)
     return gp
