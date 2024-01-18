@@ -32,7 +32,7 @@ Also convert continuous variables to [0,1] scale.
 :param df: the decoded pandas matrix
 :return: encoded matrix
 """
-def encode_matrix(factors, df):
+def encode_matrix(df, factors):
     df_copy = df.copy()
     for factorIdx in range(len(factors.factors)):
         factor = factors.factors[factorIdx]
@@ -64,7 +64,7 @@ Decode a given pandas matrix (replace values with original ordinal and categoric
 :param df: the encoded pandas matrix
 :return: decoded matrix
 """
-def decode_matrix(factors, df):
+def decode_matrix(df, factors):
     df_copy = df.copy()
     for factorIdx in range(len(factors.factors)):
         factor = factors.factors[factorIdx]
@@ -93,7 +93,7 @@ Creates numbered ranges for ordinal and categorical factors.
 :param factors: an instance of the FactorSet class, ideally has factors filled out
 :return: a list of ranges, based on the factors' min and max values or number of levels
 """
-def create_modified_ranges(factors):
+def retrieve_discrete_encoded_ranges(factors):
     modified_ranges = []
     for factor_idx in range(len(factors.factors)):
         factor = factors.factors[factor_idx]
@@ -118,18 +118,35 @@ def latin_hypercube_design(factors, n):
     #check whether there are both ordinal/categorical and continuous factors
     #if there are ordinal/categorical factors, create a separate list of ranges
     #also keep track of indices of discrete factors
-    discrete_present_bool = False
-    continuous_present_bool = False
+    #discrete_present_bool = False
+    #continuous_present_bool = False
 
-    for factor_idx in range(len(factors.factors)):
-        factor = factors.factors[factor_idx]
-        if factor[2] == "Categorical" or factor[2] == "Ordinal":
-            discrete_present_bool = True
-        elif factor[2] == "Continuous":
-            continuous_present_bool = True
+    # for factor_idx in range(len(factors.factors)):
+    #     factor = factors.factors[factor_idx]
+    #     if factor[2] == "Categorical" or factor[2] == "Ordinal":
+    #         discrete_present_bool = True
+    #     elif factor[2] == "Continuous":
+    #         continuous_present_bool = True
     
-    if discrete_present_bool and continuous_present_bool:
-        warnings.warn("Using both discrete and continuous factors will not result in a true LHS design. The design will be made as if the discrete was continuous, then rounded afterwards.", UserWarning)
+    # #TODO: edit if number of runs != number of levels in discrete factors, will not be a true LHS
+    # if discrete_present_bool and continuous_present_bool:
+    #     warnings.warn("Using both discrete and continuous factors will not result in a true LHS design. The design will be made as if the discrete was continuous, then rounded afterwards.", UserWarning)
+
+    #go through each factor, if Ordinal or Categorical, count the number of levels
+    #keep track of the factors whose number of levels != the number of runs and report them
+    discrete_factors_tracking = []
+    for factor in factors.factors:
+        factor_name = factor[0]
+        factor_type = factor[2]
+        if factor_type == "Categorical" or factor_type == "Continuous":
+            factor_range = factor[1]
+            if len(factor_range) != n:
+                discrete_factors_tracking.append(factor_name)
+    
+    #if there are elements in discrete_factors_tracking, report the warning
+    if len(discrete_factors_tracking) > 0:
+        str_of_factors = ", ".join(discrete_factors_tracking)
+        warnings.warn("Using discrete factors whose levels are not the same as the number of runs will not result in a ture Latin Hypercube sampling design. The discrete factors with different numbers of levels compared to runs: " + str_of_factors)
 
     num_dimensions = len(factors.factors)
     #call the library LHS function with the number of factors as the dimensions
@@ -139,9 +156,23 @@ def latin_hypercube_design(factors, n):
     #create a pandas dataframe out of this with column names
     col_names = [factor[0] for factor in factors.factors]
     cont_encoded_discrete_unrounded_matrix_df = pd.DataFrame(LHS_samples_unrounded,columns=col_names)
+    print("LHS samples unrounded: \n",cont_encoded_discrete_unrounded_matrix_df)
 
+    #TODO: add scaling before rounding, otherwise it will just be 0 or 1
+    scaled_encoded_discrete_unrounded_matrix_df = cont_encoded_discrete_unrounded_matrix_df.copy()
+    ranges_discrete_encoded = retrieve_discrete_encoded_ranges(factors)
+    for factor_idx in range(len(factors.factors)):
+        factor = factors.factors[factor_idx]
+        factor_name = factor[0]
+        factor_type = factor[2]
+        if factor_type == "Categorical" or factor_type == "Ordinal":
+            minimum = ranges_discrete_encoded[factor_idx][0]
+            maximum = ranges_discrete_encoded[factor_idx][1]
+            scaled_encoded_discrete_unrounded_matrix_df[factor_name] = scaled_encoded_discrete_unrounded_matrix_df[factor_name] * (maximum-minimum) + minimum
+
+    print("LHS samples scaled:\n",scaled_encoded_discrete_unrounded_matrix_df)
     #want to round each value in the discrete columns to the nearest integers
-    encoded_matrix_df = cont_encoded_discrete_unrounded_matrix_df.copy()
+    encoded_matrix_df = scaled_encoded_discrete_unrounded_matrix_df.copy()
     for factor_idx in range(len(factors.factors)):
         factor = factors.factors[factor_idx]
         name = factor[0]
@@ -150,39 +181,22 @@ def latin_hypercube_design(factors, n):
 
     #must decode the df_LHS_samples_encoded_copy
     #encoded_matrix_df_copy = encoded_matrix_df.copy()
-    decoded_matrix_df = decode_matrix(factors, encoded_matrix_df)
+    decoded_matrix_df = decode_matrix(encoded_matrix_df, factors)
     
     #return both decoded and encoded Pandas dataframes
-    return (encoded_matrix_df,decoded_matrix_df)
-
-
-"""
-Calculate Euclidean distance between two vectors
-
-:param vector1_np_array: the first vector in a numpy array
-:param vector2_np_array: the second vector in a numpy array
-:return: the Euclidean distance between vectors 1 and 2
-"""
-def euclidean_distance(vector1_np_array, vector2_np_array):
-    summation = 0
-    for idx in range(len(vector1_np_array)):
-        elem1 = vector1_np_array[idx]
-        elem2 = vector2_np_array[idx]
-        summation += (elem1-elem2)**2
-    return math.sqrt(summation)
-
+    #TODO: return decoded_matrix_df only (planning matrix)
+    return decoded_matrix_df
 
 """
-Calculate average pairwise Euclidean distance of a numpy matrix
+Calculate the minimum pairwise Euclidean distance of a numpy matrix
 
 :param matrix: the numpy matrix, calculating distances between rows
-:return: the average pairwise Euclidean distance
+:return: the minimum distance between two points in the matrix
 """
-def calc_avg_pairwise_euc_dist(matrix):
+def calc_min_pairwise_euc_dist(matrix):
     summation = 0
     pairwise_distances = pdist(matrix, 'euclidean')
-    return np.mean(pairwise_distances)
-
+    return np.min(pairwise_distances)
 
 """
 Randomly generate a vector of factors given a FactorSet, decoded
@@ -250,7 +264,7 @@ def generate_rand_vector_encoded(factors):
             vector.append(encoded_rand_value)
     return vector
 
-
+#TODO: fix wording of maximin from maxi"mean"
 """
 Create a maximin design
 
@@ -263,7 +277,7 @@ Create a maximin design
 def maximin_design(factors,n,iters=100,plot_process=False):
 
     #for keeping track of the average pairwise Euclidean distances for plotting
-    all_avg_pairwise_euc_dists = []
+    all_absolute_min_pairwise_euc_dists = []
 
     #the collection of points used for the maximin design
     encoded_vectors = []
@@ -284,37 +298,38 @@ def maximin_design(factors,n,iters=100,plot_process=False):
         #2) randomly select a vector to potentially replace in encoded_matrix_np
         rand_idx = random.choice(list(range(n)))
 
-        #3) evaluate if the replacement will improve the average pairwise Euclidean distance
+        #3) evaluate if the replacement will improve the minimum pairwise Euclidean distance
         encoded_matrix_np_copy = encoded_matrix_np.copy()
         encoded_matrix_np_copy[rand_idx] = potential_replacement_encoded
 
-        potential_avg_pairwise_euc_dist = calc_avg_pairwise_euc_dist(encoded_matrix_np_copy)
-        avg_pairwise_avg_euc_dist = calc_avg_pairwise_euc_dist(encoded_matrix_np)
+        potential_min_pairwise_euc_dist = calc_min_pairwise_euc_dist(encoded_matrix_np_copy)
+        min_pairwise_euc_dist = calc_min_pairwise_euc_dist(encoded_matrix_np)
         #if yes, do the swap
-        if potential_avg_pairwise_euc_dist > avg_pairwise_avg_euc_dist:
+        if potential_min_pairwise_euc_dist > min_pairwise_euc_dist:
             encoded_matrix_np = encoded_matrix_np_copy
-            all_avg_pairwise_euc_dists.append(potential_avg_pairwise_euc_dist)
+            all_absolute_min_pairwise_euc_dists.append(potential_min_pairwise_euc_dist)
         #if not, do not do the swap, just record the avg pairwise euc dist
         else:
-            all_avg_pairwise_euc_dists.append(avg_pairwise_avg_euc_dist)
+            all_absolute_min_pairwise_euc_dists.append(min_pairwise_euc_dist)
     
     #turn encoded_matrix_np into a dataframe
     col_names = [factor[0] for factor in factors.factors]
     encoded_matrix_df = pd.DataFrame(encoded_matrix_np,columns=col_names)
     #encoded_matrix_df_copy = encoded_matrix_df.copy()
     #decode the encoded matrix
-    decoded_matrix_df = decode_matrix(factors,encoded_matrix_df)
+    decoded_matrix_df = decode_matrix(encoded_matrix_df,factors)
 
     #if plot is true, generate a plot of all_avg_pairwise_euc_dists and display it
     if plot_process:
-        plt.plot(all_avg_pairwise_euc_dists)
-        plt.title("Average pairwise distance over time")
+        plt.plot(all_absolute_min_pairwise_euc_dists)
+        plt.title("Minimum pairwise distance over time")
         plt.xlabel("Iteration")
-        plt.ylabel("Average pairwise distance")
+        plt.ylabel("Minimum pairwise distance")
         plt.show()
 
     #return the encoded and decoded dfs
-    return (encoded_matrix_df, decoded_matrix_df)
+    #TODO: return decoded_matrix only
+    return decoded_matrix_df
 
 
 """
@@ -337,8 +352,9 @@ def random_design(factors,n):
     #rand_vectors_encoded_df_copy = rand_vectors_encoded_df.copy()
     
     #decode the rand_vectors_encoded_df_copy
-    rand_vectors_decoded_df = decode_matrix(factors,rand_vectors_encoded_df)
+    rand_vectors_decoded_df = decode_matrix(rand_vectors_encoded_df,factors)
 
     #return both encoded and decoded pd frames
-    return (rand_vectors_encoded_df,rand_vectors_decoded_df)
+    #TODO: return decoded matrix only
+    return rand_vectors_decoded_df
 
