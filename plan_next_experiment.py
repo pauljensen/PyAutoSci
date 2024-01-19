@@ -4,6 +4,7 @@ from gp_update_function import *
 from PlotWrapper import *
 import itertools
 from scipy.stats import norm
+from scipy.optimize import minimize
 
 """
 Randomly generate an array of continuous factors from the given factor set.
@@ -25,10 +26,11 @@ def generate_random_continuous(factors):
     #scale the samples according to the factors ranges
     for factor_idx in range(len(factors.factors)):
         factor = factors.factors[factor_idx]
-        factor_range = factor[1]
-        minimum = factor_range[0]
-        maximum = factor_range[1]
-        random_sampled_scaled[factor_idx] = random_sampled_unscaled[factor_idx] * (maximum-minimum) + minimum
+        if factor[2] == "Continuous":
+            factor_range = factor[1]
+            minimum = factor_range[0]
+            maximum = factor_range[1]
+            random_sampled_scaled[factor_idx] = random_sampled_unscaled[factor_idx] * (maximum-minimum) + minimum
     
     return random_sampled_scaled
 
@@ -36,21 +38,26 @@ def generate_random_continuous(factors):
 """
 Suggests a next experiment to conduct based on type_of_plan. 
 
-:param X_design: pandas matrix containing experiments already executed, encoded
 :param y_responses: a numpy array of the responses from the catapult so far
 :param factors: the FactorSet class corresponding to the design matrix
 :param gp: the current gp model
 :param type_of_plan: string indicating whether to find experiments based on "Exploration" (uncertainty), "Exploitation" (lowest error value), "EI" (mix of both)
 :return: an array containing the encoded next best experiment to execute and the resulting objective value
 """
-def plan_next_experiment(X_design_encoded, y_responses, factors, gp, type_of_plan, random_restarts = 1000):
+def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts = 100):
 
     #retrieve the levels lists of the discrete factors
     levels_list = []
     for factor in factors.factors:
         type_of_factor = factor[2]
         if type_of_factor == "Ordinal" or type_of_factor == "Categorical":
-            levels_list.append(factor[1])
+            #need to encode these factors, generate a mapping
+            #each level corresponds to an integer
+            #e.g. ["ping pong", "whiffle"] => [0,1]
+            #e.g. [1,2,3] => [0,1,2]
+            len_levels = len(factor[1])
+            encoded_levels = list(range(len_levels))
+            levels_list.append(encoded_levels)
 
     #create a list of tuples where all possible combos of discrete factors are enumerated
     #go in the order of the discrete factors (the last factors)
@@ -62,6 +69,9 @@ def plan_next_experiment(X_design_encoded, y_responses, factors, gp, type_of_pla
     all_possible_improvements_X = []
     all_possible_improvements_y = []
 
+    #names of factors
+    factor_names = [factor[0] for factor in factors.factors]
+
     #retrieve the bounds for the continuous factors
     bounds = []
     for factor in factors.factors:
@@ -70,23 +80,30 @@ def plan_next_experiment(X_design_encoded, y_responses, factors, gp, type_of_pla
 
     #go through the number of random restarts
     for rr in range(random_restarts):
+
+        if rr%10 == 0:
+            print("On random restart number ",rr)
+
         #define random starting point
         x0 = generate_random_continuous(factors)
 
         #for each possible discrete combination (in our case, 6):
-        for discrete_combo in all_discrete_poss:
+        for discrete_combo_non_list in all_discrete_poss:
+            discrete_combo = np.array(list(discrete_combo_non_list))
 
             #define the exploration, exploitation, and EI objective functions
             #exploration objective returns the uncertainty from the GP
             def exploration(continuous_input):
-                x = np.array([continuous_input+discrete_combo])
-                mu, sigma = gp.predict(x, return_std=True)
+                x_numpy = np.hstack((continuous_input,discrete_combo))
+                x_dataframe = pd.DataFrame([x_numpy],columns=factor_names)
+                mu, sigma = gp.predict(x_dataframe, return_std=True)
                 return -sigma[0]
 
             #exploitation returns the prediction (the catapult distance error) from the GP
             def exploitation(continuous_input):
-                x = np.array([continuous_input+discrete_combo])
-                mu, sigma = gp.predict(x, return_std=True)
+                x_numpy = np.hstack((continuous_input,discrete_combo))
+                x_dataframe = pd.DataFrame([x_numpy],columns=factor_names)
+                mu, sigma = gp.predict(x_dataframe, return_std=True)
                 return mu
 
             #EI returns a mixture of exploration and exploitation
@@ -106,8 +123,10 @@ def plan_next_experiment(X_design_encoded, y_responses, factors, gp, type_of_pla
             
             #the objective function to give the minimize call, inputting y_min_responses found earlier and the gp
             def min_ei(continuous_input):
-                x = np.array([continuous_input+discrete_combo])
-                return -EI(x, y_min_responses, gp).ravel()
+                #TODO: make x into a pandas dataframe containing one point and appropriate column names
+                x_numpy = np.hstack((continuous_input,discrete_combo))
+                x_dataframe = pd.DataFrame([x_numpy],columns=factor_names)
+                return -EI(x_dataframe, y_min_responses, gp).ravel()
 
             #define res at first
             res = None
@@ -116,7 +135,7 @@ def plan_next_experiment(X_design_encoded, y_responses, factors, gp, type_of_pla
             #if doing exploration
             if type_of_plan == "Exploration":
                 #do optimization with exploration objective function
-                res = minimize(exploration,x0,bound=bounds,method='L-BFGS-B')
+                res = minimize(exploration,x0,bounds=bounds,method='L-BFGS-B')
 
             #if doing exploitation
             elif type_of_plan == "Exploitation":
