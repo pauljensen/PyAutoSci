@@ -5,10 +5,11 @@ import plotly.express as px
 from PlotWrapper import *
 
 myFactorSet = FactorSet()
+myFactorSet.add_categorical(name="projectile", levels=["pingpong", "whiffle"])
+
+myFactorSet.add_ordinal(name="rubber_bands", levels=[1, 2, 3])
 
 myFactorSet.add_continuous(name="draw_angle", minimum=0, maximum=180)
-myFactorSet.add_ordinal(name="rubber_bands", levels=[1, 2, 3])
-myFactorSet.add_categorical(name="projectile", levels=["pingpong", "whiffle"])
 
 print("My factor set:", myFactorSet.factors)
 

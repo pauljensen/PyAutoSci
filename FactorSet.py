@@ -3,7 +3,7 @@ class FactorSet:
         self.factors = []
             
     def add_continuous(self, name, minimum, maximum):
-        self.factors.append([name, [minimum, maximum], "Continuous"])
+        self.factors.insert(0,[name, [minimum, maximum], "Continuous"])
 
     def add_ordinal(self, name, levels):
         self.factors.append([name, levels, "Ordinal"])
