@@ -156,9 +156,8 @@ def latin_hypercube_design(factors, n):
     #create a pandas dataframe out of this with column names
     col_names = [factor[0] for factor in factors.factors]
     cont_encoded_discrete_unrounded_matrix_df = pd.DataFrame(LHS_samples_unrounded,columns=col_names)
-    print("LHS samples unrounded: \n",cont_encoded_discrete_unrounded_matrix_df)
+    #print("LHS samples unrounded: \n",cont_encoded_discrete_unrounded_matrix_df)
 
-    #TODO: add scaling before rounding, otherwise it will just be 0 or 1
     scaled_encoded_discrete_unrounded_matrix_df = cont_encoded_discrete_unrounded_matrix_df.copy()
     ranges_discrete_encoded = retrieve_discrete_encoded_ranges(factors)
     for factor_idx in range(len(factors.factors)):
@@ -170,7 +169,7 @@ def latin_hypercube_design(factors, n):
             maximum = ranges_discrete_encoded[factor_idx][1]
             scaled_encoded_discrete_unrounded_matrix_df[factor_name] = scaled_encoded_discrete_unrounded_matrix_df[factor_name] * (maximum-minimum) + minimum
 
-    print("LHS samples scaled:\n",scaled_encoded_discrete_unrounded_matrix_df)
+    #print("LHS samples scaled:\n",scaled_encoded_discrete_unrounded_matrix_df)
     #want to round each value in the discrete columns to the nearest integers
     encoded_matrix_df = scaled_encoded_discrete_unrounded_matrix_df.copy()
     for factor_idx in range(len(factors.factors)):
@@ -184,7 +183,7 @@ def latin_hypercube_design(factors, n):
     decoded_matrix_df = decode_matrix(encoded_matrix_df, factors)
     
     #return both decoded and encoded Pandas dataframes
-    #TODO: return decoded_matrix_df only (planning matrix)
+  
     return decoded_matrix_df
 
 """
@@ -264,7 +263,6 @@ def generate_rand_vector_encoded(factors):
             vector.append(encoded_rand_value)
     return vector
 
-#TODO: fix wording of maximin from maxi"mean"
 """
 Create a maximin design
 
@@ -328,7 +326,6 @@ def maximin_design(factors,n,iters=100,plot_process=False):
         plt.show()
 
     #return the encoded and decoded dfs
-    #TODO: return decoded_matrix only
     return decoded_matrix_df
 
 
@@ -355,6 +352,5 @@ def random_design(factors,n):
     rand_vectors_decoded_df = decode_matrix(rand_vectors_encoded_df,factors)
 
     #return both encoded and decoded pd frames
-    #TODO: return decoded matrix only
     return rand_vectors_decoded_df
 

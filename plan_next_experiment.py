@@ -6,6 +6,7 @@ import itertools
 from scipy.stats import norm
 from scipy.optimize import minimize
 
+    
 """
 Randomly generate an array of continuous factors from the given factor set.
 
@@ -44,7 +45,7 @@ Suggests a next experiment to conduct based on type_of_plan.
 :param type_of_plan: string indicating whether to find experiments based on "Exploration" (uncertainty), "Exploitation" (lowest error value), "EI" (mix of both)
 :return: an array containing the encoded next best experiment to execute and the resulting objective value
 """
-def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts = 100):
+def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts = 2):
 
     #retrieve the levels lists of the discrete factors
     levels_list = []
@@ -66,7 +67,8 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
     all_discrete_poss = list(all_discrete_poss_iterobj)
 
     #keep track of all possible points to go for and take the one that improves objective the most
-    all_possible_improvements_X = []
+    all_possible_improvements_X_continuous = []
+    all_possible_improvements_X_discrete = []
     all_possible_improvements_y = []
 
     #names of factors
@@ -90,6 +92,7 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
         #for each possible discrete combination (in our case, 6):
         for discrete_combo_non_list in all_discrete_poss:
             discrete_combo = np.array(list(discrete_combo_non_list))
+            all_possible_improvements_X_discrete.append(discrete_combo)
 
             #define the exploration, exploitation, and EI objective functions
             #exploration objective returns the uncertainty from the GP
@@ -152,27 +155,52 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
                 raise ValueError("The type_of_plan must be Exploration, Exploitation or EI.")
             
             #add the res.x and res.fun to the all_possible_improvements arrays
-            all_possible_improvements_X.append(res.x)
+            all_possible_improvements_X_continuous.append(res.x)
             all_possible_improvements_y.append(res.fun)
     
     #next, go through all collected optima and find the aboslute best one
     next_suggested_experiment = None
     obj_val = None
+
+    print("all_possible_improvements_X_continuous\n",all_possible_improvements_X_continuous)
+    print("\n")
+    print("all_possible_improvements_X_discrete\n",all_possible_improvements_X_discrete)
+    print("\n")
+    print("all_possible_improvements_y\n",all_possible_improvements_y)
+    print("\n")
         
     #if doing EI or exploration, we are maximizing so find index of max val within all_possible_improvements_y
     if type_of_plan == "EI" or type_of_plan == "Exploration":
         obj_val = max(all_possible_improvements_y)
         max_index = all_possible_improvements_y.index(obj_val)
 
-        next_suggested_experiment = all_possible_improvements_X[max_index]
+        next_suggested_experiment_continuous = all_possible_improvements_X_continuous[max_index]
+        next_suggested_experiment_discrete = all_possible_improvements_X_discrete[max_index]
     
     #if doing exploitation, we are minimizing distance error, so find index of min val within all_possible_improvements_y
     elif type_of_plan == "Exploitation":
         obj_val = min(all_possible_improvements_y)
         min_index = all_possible_improvements_y.index(obj_val)
 
-        next_suggested_experiment = all_possible_improvements_X[min_index]
+        next_suggested_experiment_continuous = all_possible_improvements_X_continuous[min_index]
+        next_suggested_experiment_discrete = all_possible_improvements_X_discrete[min_index]
+
+    #append the continuous and discrete together, then create a pandas df to return
+    next_suggested_experiment = np.hstack((next_suggested_experiment_continuous,next_suggested_experiment_discrete))
+    next_suggested_experiment_df_discrete_encoded = pd.DataFrame([next_suggested_experiment],columns=factor_names)
+
+    #need to convert discrete factors in next_suggested_experiment_df_discrete_encoded back into decoded terms
+    next_suggested_experiment_df = next_suggested_experiment_df_discrete_encoded.copy()
+    for factor in factors.factors:
+        if factor[2] == "Ordinal" or factor[2] == "Categorical":
+            #create mapping between levels
+            levels = factor[1]
+            name = factor[0]
+            mapping = dict()
+            for idx in range(len(levels)):
+                mapping[idx] = levels[idx]
+            next_suggested_experiment_df[name] = next_suggested_experiment_df[name].replace(mapping)
     
-    return next_suggested_experiment, obj_val
+    return next_suggested_experiment_df, obj_val
 
     
