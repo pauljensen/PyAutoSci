@@ -51,7 +51,6 @@ def encode_matrix(df, factors):
             factor_range = factor[1]
             minimum = factor_range[0]
             maximum = factor_range[1]
-
             #get the column from df_copy, and normalize everything in that column
             df_copy[name] = (df_copy[name]-minimum)/(maximum-minimum)
     return df_copy

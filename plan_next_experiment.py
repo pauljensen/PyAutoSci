@@ -22,18 +22,18 @@ def generate_random_continuous(factors):
     
     #create randomly sampled array of number of continuous factors
     random_sampled_unscaled = np.random.uniform(size=num_continuous)
-    random_sampled_scaled = random_sampled_unscaled.copy()
+    #random_sampled_scaled = random_sampled_unscaled.copy()
 
-    #scale the samples according to the factors ranges
-    for factor_idx in range(len(factors.factors)):
-        factor = factors.factors[factor_idx]
-        if factor[2] == "Continuous":
-            factor_range = factor[1]
-            minimum = factor_range[0]
-            maximum = factor_range[1]
-            random_sampled_scaled[factor_idx] = random_sampled_unscaled[factor_idx] * (maximum-minimum) + minimum
+    # #scale the samples according to the factors ranges
+    # for factor_idx in range(len(factors.factors)):
+    #     factor = factors.factors[factor_idx]
+    #     if factor[2] == "Continuous":
+    #         factor_range = factor[1]
+    #         minimum = factor_range[0]
+    #         maximum = factor_range[1]
+    #         random_sampled_scaled[factor_idx] = random_sampled_unscaled[factor_idx] * (maximum-minimum) + minimum
     
-    return random_sampled_scaled
+    return random_sampled_unscaled
 
 
 """
@@ -45,7 +45,7 @@ Suggests a next experiment to conduct based on type_of_plan.
 :param type_of_plan: string indicating whether to find experiments based on "Exploration" (uncertainty), "Exploitation" (lowest error value), "EI" (mix of both)
 :return: an array containing the encoded next best experiment to execute and the resulting objective value
 """
-def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts = 2):
+def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts = 100):
 
     #retrieve the levels lists of the discrete factors
     levels_list = []
@@ -74,17 +74,17 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
     #names of factors
     factor_names = [factor[0] for factor in factors.factors]
 
-    #retrieve the bounds for the continuous factors
+    #retrieve the bounds for the continuous factors, just [0,1]
     bounds = []
     for factor in factors.factors:
         if factor[2] == "Continuous":
-            bounds.append(factor[1])
+            bounds.append([0,1])
 
     #go through the number of random restarts
     for rr in range(random_restarts):
 
-        if rr%10 == 0:
-            print("On random restart number ",rr)
+        #if rr%100 == 0:
+        #    print("On random restart number ",rr)
 
         #define random starting point
         x0 = generate_random_continuous(factors)
@@ -137,17 +137,17 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
             #want to perform an optimization
             #if doing exploration
             if type_of_plan == "Exploration":
-                #do optimization with exploration objective function
+                #do optimization with exploration objective function, want to maximize uncertainty
                 res = minimize(exploration,x0,bounds=bounds,method='L-BFGS-B')
 
             #if doing exploitation
             elif type_of_plan == "Exploitation":
-                #do optimization with exploitation objective function
+                #do optimization with exploitation objective function, want to minimize distance
                 res = minimize(exploitation,x0,bounds=bounds,method='L-BFGS-B')
             
             #if doing EI
             elif type_of_plan == "EI":
-                #do optimization with EI objective function
+                #do optimization with EI objective function, want to maximize exepcted improvement
                 res = minimize(min_ei,x0,bounds=bounds,method='L-BFGS-B')
             
             #if the type_of_plan does not match any of the strings above, return an error
@@ -162,17 +162,19 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
     next_suggested_experiment = None
     obj_val = None
 
-    print("all_possible_improvements_X_continuous\n",all_possible_improvements_X_continuous)
-    print("\n")
-    print("all_possible_improvements_X_discrete\n",all_possible_improvements_X_discrete)
-    print("\n")
-    print("all_possible_improvements_y\n",all_possible_improvements_y)
-    print("\n")
+    # print("all_possible_improvements_X_continuous\n",all_possible_improvements_X_continuous)
+    # print("\n")
+    # print("all_possible_improvements_X_discrete\n",all_possible_improvements_X_discrete)
+    # print("\n")
+    # print("all_possible_improvements_y\n",all_possible_improvements_y)
+    # print("\n")
         
     #if doing EI or exploration, we are maximizing so find index of max val within all_possible_improvements_y
     if type_of_plan == "EI" or type_of_plan == "Exploration":
-        obj_val = max(all_possible_improvements_y)
-        max_index = all_possible_improvements_y.index(obj_val)
+        #multiply all_possible_improvements_y by -1 because these objective values are negative
+        all_possible_improvements_y_true = [(elem*-1) for elem in all_possible_improvements_y]
+        obj_val = max(all_possible_improvements_y_true)
+        max_index = all_possible_improvements_y_true.index(obj_val)
 
         next_suggested_experiment_continuous = all_possible_improvements_X_continuous[max_index]
         next_suggested_experiment_discrete = all_possible_improvements_X_discrete[max_index]
@@ -187,20 +189,25 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
 
     #append the continuous and discrete together, then create a pandas df to return
     next_suggested_experiment = np.hstack((next_suggested_experiment_continuous,next_suggested_experiment_discrete))
-    next_suggested_experiment_df_discrete_encoded = pd.DataFrame([next_suggested_experiment],columns=factor_names)
+    next_suggested_experiment_df_encoded = pd.DataFrame([next_suggested_experiment],columns=factor_names)
+    #print("next_suggested_experiment_df_encoded\n",next_suggested_experiment_df_encoded)
+    #print("\n")
 
     #need to convert discrete factors in next_suggested_experiment_df_discrete_encoded back into decoded terms
-    next_suggested_experiment_df = next_suggested_experiment_df_discrete_encoded.copy()
-    for factor in factors.factors:
-        if factor[2] == "Ordinal" or factor[2] == "Categorical":
-            #create mapping between levels
-            levels = factor[1]
-            name = factor[0]
-            mapping = dict()
-            for idx in range(len(levels)):
-                mapping[idx] = levels[idx]
-            next_suggested_experiment_df[name] = next_suggested_experiment_df[name].replace(mapping)
+    # next_suggested_experiment_df = next_suggested_experiment_df_discrete_encoded.copy()
+    # for factor in factors.factors:
+    #     if factor[2] == "Ordinal" or factor[2] == "Categorical":
+    #         #create mapping between levels
+    #         levels = factor[1]
+    #         name = factor[0]
+    #         mapping = dict()
+    #         for idx in range(len(levels)):
+    #             mapping[idx] = levels[idx]
+    #         next_suggested_experiment_df[name] = next_suggested_experiment_df[name].replace(mapping)
+
+    #need to decode the entire next suggested experiment
+    next_suggested_experiment_df_decoded = decode_matrix(next_suggested_experiment_df_encoded,factors)
     
-    return next_suggested_experiment_df, obj_val
+    return next_suggested_experiment_df_decoded, obj_val
 
     

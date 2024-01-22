@@ -1,5 +1,7 @@
 from sklearn.gaussian_process import GaussianProcessRegressor
 import copy
+from InitStrategies import *
+from FactorSet import *
 """
 Update a Gaussian Process model with new X and y data (iteration 1+)
 Also does not do hyperparameter search (optimizer=None).
@@ -9,27 +11,21 @@ Also does not do hyperparameter search (optimizer=None).
 :param y: an array of new training y
 :return: a GP model updated with the new training data.
 """
-def update_model(gp, X, y):
-    X_copy = X.copy()
-    #must encode the discrete factors
-    for factor in factors.factors:
-        if factor[2] == "Ordinal" or factor[2] == "Categorical":
-            #create mapping between levels
-            levels = factor[1]
-            name = factor[0]
-            mapping = dict()
-            for idx in range(len(levels)):
-                level = levels[idx]
-                mapping[level] = float(idx)
-            X_copy[name] = X_copy[name].replace(mapping)
+def update_model(gp, X, y, factors):
+    y = np.array([y])
+    #must encode matrix
+    X_copy = encode_matrix(X, factors)
     X_copy_np = X_copy.to_numpy()
 
     #include old trained data from previous iterations
     all_X = np.vstack([gp.X_train_, X_copy_np])
-    all_y = np.vstack([gp.y_train_, y])
+    all_y = np.hstack([gp.y_train_, y])
+
+    #get factor names
+    names = [factor[0] for factor in factors.factors]
 
     #change back into pandas DataFrame
-    all_X_df = pd.DataFrame(all_X)
+    all_X_df = pd.DataFrame(all_X,columns=names)
     
     #turn off hyperparameter searching
     gp.optimizer=None
@@ -48,19 +44,21 @@ Does hyperparameter search.
 :return: a GP model updated with the new training data.
 """
 def train_model(gp, X, y, factors):
-    X_copy = X.copy()
-    #must encode discrete factors first
-    for factor in factors.factors:
-        if factor[2] == "Ordinal" or factor[2] == "Categorical":
-            #create mapping between levels
-            levels = factor[1]
-            name = factor[0]
-            mapping = dict()
-            for idx in range(len(levels)):
-                level = levels[idx]
-                mapping[level] = float(idx)
-            X_copy[name] = X_copy[name].replace(mapping)
-    #print("Encoded discrete factors:\n",X_copy)
-    #fit the GP onto all the data and with no hyperparameter tuning
-    gp.fit(X_copy,y)
+    #must encode matrix first
+    X_encoded = encode_matrix(X,factors)
+
+    gp.fit(X_encoded,y)
     return gp
+
+"""
+Use the given GP to predict a point, takes in a decoded Pandas DF.
+
+:param gp: a given GP model
+:param X: a pandas DataFrame of point in question, decoded.
+:param factors: the factorset class instance
+:return: an array with the distance prediction and standard deviation from the GP.
+"""
+def model_predict(gp,X,factors):
+    #first encode X
+    X_encoded = encode_matrix(X,factors)
+    return gp.predict(X_encoded,return_std=True)
