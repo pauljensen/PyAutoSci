@@ -16,13 +16,11 @@ Returns the expected improvement of a range of points given a GP and a y_min val
 """
 def calculate_EI(potential_x, gp):
     y_min = np.min(gp.y_train_)
-    print("y_min:",y_min)
     mu, sigma = gp.predict(potential_x, return_std=True)
-    print("mu:",mu)
+
     with np.errstate(divide='warn'):
-        improvement = y_min - mu
-        print("improvement:",improvement)
-        print("sigma:",sigma)
+        all_zeroes = np.zeros(np.shape(mu))
+        improvement = np.maximum(y_min-mu, all_zeroes)
         Z = improvement / sigma
         ei = improvement * norm.cdf(Z) + sigma * norm.pdf(Z)
         ei[sigma == 0.0] = 0.0
@@ -61,8 +59,6 @@ def distance_heatmaps(gp,factors):
 
     #create meshgrid for plotting (flatten later)
     draw_angle_grid, rubber_band_grid = np.meshgrid(draw_angle_range,rubber_band_range)
-    #print("draw_angle_grid:",draw_angle_grid)
-    #print("rubber_band_grid:",rubber_band_grid)
 
     #create encoded list for number of projectiles
     num_projectiles = len(ranges["projectile"])
@@ -82,8 +78,6 @@ def distance_heatmaps(gp,factors):
     for projectile_value in projectile_range:
         projectile_value_levels = ranges["projectile"]
         projectile_value_decoded = projectile_value_levels[projectile_value]
-        
-        #print("draw_angle_grid ravel:",draw_angle_grid.ravel())
         
         # Create input array for predictions: combine draw_angle_grid, rubber_band_grid with fixed projectile_value
         list_to_turn_to_Xpred = []
@@ -151,8 +145,6 @@ def uncertainty_heatmaps(gp,factors):
 
     #create meshgrid for plotting (flatten later)
     draw_angle_grid, rubber_band_grid = np.meshgrid(draw_angle_range,rubber_band_range)
-    #print("draw_angle_grid:",draw_angle_grid)
-    #print("rubber_band_grid:",rubber_band_grid)
 
     #create encoded list for number of projectiles
     num_projectiles = len(ranges["projectile"])
@@ -172,8 +164,6 @@ def uncertainty_heatmaps(gp,factors):
     for projectile_value in projectile_range:
         projectile_value_levels = ranges["projectile"]
         projectile_value_decoded = projectile_value_levels[projectile_value]
-        
-        #print("draw_angle_grid ravel:",draw_angle_grid.ravel())
         
         # Create input array for predictions: combine draw_angle_grid, rubber_band_grid with fixed projectile_value
         list_to_turn_to_Xpred = []
@@ -281,7 +271,7 @@ def EI_heatmaps(gp,factors):
 
         # Reshape for plotting
         ei_values = ei_values.reshape(draw_angle_grid.shape)
-        print("ei_values:",ei_values)
+        
         # Plotting the heatmap for GP standard deviation
         plt.figure()
         plt.imshow(ei_values, extent=[draw_angle_min_decoded, draw_angle_max_decoded, rubber_bands_min_decoded, rubber_bands_max_decoded],

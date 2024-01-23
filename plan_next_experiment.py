@@ -22,33 +22,20 @@ def generate_random_continuous(factors):
     
     #create randomly sampled array of number of continuous factors
     random_sampled_unscaled = np.random.uniform(size=num_continuous)
-    #random_sampled_scaled = random_sampled_unscaled.copy()
 
-    # #scale the samples according to the factors ranges
-    # for factor_idx in range(len(factors.factors)):
-    #     factor = factors.factors[factor_idx]
-    #     if factor[2] == "Continuous":
-    #         factor_range = factor[1]
-    #         minimum = factor_range[0]
-    #         maximum = factor_range[1]
-    #         random_sampled_scaled[factor_idx] = random_sampled_unscaled[factor_idx] * (maximum-minimum) + minimum
-    
     return random_sampled_unscaled
 
 
 """
-Suggests a next experiment to conduct based on type_of_plan. 
+Suggests a next experiment to conduct based on policy. 
 
-:param y_responses: a numpy array of the responses from the catapult so far
-:param factors: the FactorSet class corresponding to the design matrix
 :param gp: the current gp model
-:param type_of_plan: string indicating whether to find experiments based on "Exploration" (uncertainty), "Exploitation" (lowest error value), "EI" (mix of both)
+:param factors: the FactorSet class corresponding to the design matrix
+:param policy: string indicating whether to find experiments based on "Exploration" (uncertainty), "Exploitation" (lowest error value), "EI" (mix of both)
 :return: an array containing the encoded next best experiment to execute and the resulting objective value
 """
-def plan_next_experiment(gp, factors, type_of_plan, random_restarts = 100):
+def plan_next_experiment(gp, factors, policy, random_restarts = 100):
 
-    #collect y responses
-    y_responses = gp.y_train_
     #retrieve the levels lists of the discrete factors
     levels_list = []
     for factor in factors.factors:
@@ -85,9 +72,6 @@ def plan_next_experiment(gp, factors, type_of_plan, random_restarts = 100):
     #go through the number of random restarts
     for rr in range(random_restarts):
 
-        #if rr%100 == 0:
-        #    print("On random restart number ",rr)
-
         #define random starting point
         x0 = generate_random_continuous(factors)
 
@@ -112,48 +96,47 @@ def plan_next_experiment(gp, factors, type_of_plan, random_restarts = 100):
                 return mu
 
             #EI returns a mixture of exploration and exploitation
-            def EI(potential_x, y_min, gp):
+            def EI(potential_x, gp):
+                y_min = np.min(gp.y_train_)
                 mu, sigma = gp.predict(potential_x, return_std=True)
 
                 with np.errstate(divide='warn'):
-                    improvement = y_min - mu
+                    all_zeros = np.zeros(np.size(mu))
+                    improvement = np.maximum(all_zeros,y_min - mu)
                     Z = improvement / sigma
                     ei = improvement * norm.cdf(Z) + sigma * norm.pdf(Z)
                     ei[sigma == 0.0] = 0.0
 
                 return ei
             
-            #get the minimum y from y_responses
-            y_min_responses = np.min(y_responses)
-            
             #the objective function to give the minimize call, inputting y_min_responses found earlier and the gp
             def min_ei(continuous_input):
                 x_numpy = np.hstack((continuous_input,discrete_combo))
                 x_dataframe = pd.DataFrame([x_numpy],columns=factor_names)
-                return -EI(x_dataframe, y_min_responses, gp).ravel()
+                return -EI(x_dataframe, gp).ravel()
 
             #define res at first
             res = None
 
             #want to perform an optimization
             #if doing exploration
-            if type_of_plan == "Exploration":
+            if policy == "Exploration":
                 #do optimization with exploration objective function, want to maximize uncertainty
                 res = minimize(exploration,x0,bounds=bounds,method='L-BFGS-B')
 
             #if doing exploitation
-            elif type_of_plan == "Exploitation":
+            elif policy == "Exploitation":
                 #do optimization with exploitation objective function, want to minimize distance
                 res = minimize(exploitation,x0,bounds=bounds,method='L-BFGS-B')
             
             #if doing EI
-            elif type_of_plan == "EI":
+            elif policy == "EI":
                 #do optimization with EI objective function, want to maximize exepcted improvement
                 res = minimize(min_ei,x0,bounds=bounds,method='L-BFGS-B')
             
-            #if the type_of_plan does not match any of the strings above, return an error
+            #if the policy does not match any of the strings above, return an error
             else:
-                raise ValueError("The type_of_plan must be Exploration, Exploitation or EI.")
+                raise ValueError("The policy must be Exploration, Exploitation or EI.")
             
             #add the res.x and res.fun to the all_possible_improvements arrays
             all_possible_improvements_X_continuous.append(res.x)
@@ -162,16 +145,9 @@ def plan_next_experiment(gp, factors, type_of_plan, random_restarts = 100):
     #next, go through all collected optima and find the aboslute best one
     next_suggested_experiment = None
     obj_val = None
-
-    # print("all_possible_improvements_X_continuous\n",all_possible_improvements_X_continuous)
-    # print("\n")
-    # print("all_possible_improvements_X_discrete\n",all_possible_improvements_X_discrete)
-    # print("\n")
-    # print("all_possible_improvements_y\n",all_possible_improvements_y)
-    # print("\n")
         
     #if doing EI or exploration, we are maximizing so find index of max val within all_possible_improvements_y
-    if type_of_plan == "EI" or type_of_plan == "Exploration":
+    if policy == "EI" or policy == "Exploration":
         #multiply all_possible_improvements_y by -1 because these objective values are negative
         all_possible_improvements_y_true = [(elem*-1) for elem in all_possible_improvements_y]
         obj_val = max(all_possible_improvements_y_true)
@@ -181,7 +157,7 @@ def plan_next_experiment(gp, factors, type_of_plan, random_restarts = 100):
         next_suggested_experiment_discrete = all_possible_improvements_X_discrete[max_index]
     
     #if doing exploitation, we are minimizing distance error, so find index of min val within all_possible_improvements_y
-    elif type_of_plan == "Exploitation":
+    elif policy == "Exploitation":
         obj_val = min(all_possible_improvements_y)
         min_index = all_possible_improvements_y.index(obj_val)
 
@@ -191,20 +167,6 @@ def plan_next_experiment(gp, factors, type_of_plan, random_restarts = 100):
     #append the continuous and discrete together, then create a pandas df to return
     next_suggested_experiment = np.hstack((next_suggested_experiment_continuous,next_suggested_experiment_discrete))
     next_suggested_experiment_df_encoded = pd.DataFrame([next_suggested_experiment],columns=factor_names)
-    #print("next_suggested_experiment_df_encoded\n",next_suggested_experiment_df_encoded)
-    #print("\n")
-
-    #need to convert discrete factors in next_suggested_experiment_df_discrete_encoded back into decoded terms
-    # next_suggested_experiment_df = next_suggested_experiment_df_discrete_encoded.copy()
-    # for factor in factors.factors:
-    #     if factor[2] == "Ordinal" or factor[2] == "Categorical":
-    #         #create mapping between levels
-    #         levels = factor[1]
-    #         name = factor[0]
-    #         mapping = dict()
-    #         for idx in range(len(levels)):
-    #             mapping[idx] = levels[idx]
-    #         next_suggested_experiment_df[name] = next_suggested_experiment_df[name].replace(mapping)
 
     #need to decode the entire next suggested experiment
     next_suggested_experiment_df_decoded = decode_matrix(next_suggested_experiment_df_encoded,factors)
