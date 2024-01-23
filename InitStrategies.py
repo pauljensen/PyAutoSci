@@ -353,3 +353,18 @@ def random_design(factors,n):
     #return both encoded and decoded pd frames
     return rand_vectors_decoded_df
 
+
+"""
+Wrapper function for all 3 design functions
+
+:param factors: an instance of the FactorSet class, ideally has factors filled out
+:param n: the number of samples with which to populate the random design
+:return: a pandas dataframe where each row is a point in the random design
+"""
+def create_designc(design,factors,n):
+    if design.lower() == "lhs":
+        return latin_hypercube_design(factors, n)
+    elif design.lower() == "maximin":
+        return maximin_design(factors,n)
+    elif design.lower() == "random":
+        return random_design(factors,n)
