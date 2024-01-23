@@ -361,7 +361,7 @@ Wrapper function for all 3 design functions
 :param n: the number of samples with which to populate the random design
 :return: a pandas dataframe where each row is a point in the random design
 """
-def create_designc(design,factors,n):
+def create_design(design,factors,n):
     if design.lower() == "lhs":
         return latin_hypercube_design(factors, n)
     elif design.lower() == "maximin":
