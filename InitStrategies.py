@@ -114,23 +114,6 @@ Create a Latin Hypercube design. Uses scipy's LatinHypercube function.
 """
 def latin_hypercube_design(factors, n):
 
-    #check whether there are both ordinal/categorical and continuous factors
-    #if there are ordinal/categorical factors, create a separate list of ranges
-    #also keep track of indices of discrete factors
-    #discrete_present_bool = False
-    #continuous_present_bool = False
-
-    # for factor_idx in range(len(factors.factors)):
-    #     factor = factors.factors[factor_idx]
-    #     if factor[2] == "Categorical" or factor[2] == "Ordinal":
-    #         discrete_present_bool = True
-    #     elif factor[2] == "Continuous":
-    #         continuous_present_bool = True
-    
-    # #TODO: edit if number of runs != number of levels in discrete factors, will not be a true LHS
-    # if discrete_present_bool and continuous_present_bool:
-    #     warnings.warn("Using both discrete and continuous factors will not result in a true LHS design. The design will be made as if the discrete was continuous, then rounded afterwards.", UserWarning)
-
     #go through each factor, if Ordinal or Categorical, count the number of levels
     #keep track of the factors whose number of levels != the number of runs and report them
     discrete_factors_tracking = []
@@ -155,35 +138,36 @@ def latin_hypercube_design(factors, n):
     #create a pandas dataframe out of this with column names
     col_names = [factor[0] for factor in factors.factors]
     cont_encoded_discrete_unrounded_matrix_df = pd.DataFrame(LHS_samples_unrounded,columns=col_names)
-    #print("LHS samples unrounded: \n",cont_encoded_discrete_unrounded_matrix_df)
 
-    scaled_encoded_discrete_unrounded_matrix_df = cont_encoded_discrete_unrounded_matrix_df.copy()
-    ranges_discrete_encoded = retrieve_discrete_encoded_ranges(factors)
+    #scale and ceiling the discrete factors
+    scaled_discrete_encoded_cont_matrix_df = cont_encoded_discrete_unrounded_matrix_df.copy()
     for factor_idx in range(len(factors.factors)):
         factor = factors.factors[factor_idx]
         factor_name = factor[0]
+        factor_levels = factor[1]
         factor_type = factor[2]
         if factor_type == "Categorical" or factor_type == "Ordinal":
-            minimum = ranges_discrete_encoded[factor_idx][0]
-            maximum = ranges_discrete_encoded[factor_idx][1]
-            scaled_encoded_discrete_unrounded_matrix_df[factor_name] = scaled_encoded_discrete_unrounded_matrix_df[factor_name] * (maximum-minimum) + minimum
+            num_discrete_factors = len(factor_levels)
+            scaled_discrete_encoded_cont_matrix_df[factor_name] = np.ceil(scaled_discrete_encoded_cont_matrix_df[factor_name] * num_discrete_factors)
 
-    #print("LHS samples scaled:\n",scaled_encoded_discrete_unrounded_matrix_df)
-    #want to round each value in the discrete columns to the nearest integers
-    encoded_matrix_df = scaled_encoded_discrete_unrounded_matrix_df.copy()
-    for factor_idx in range(len(factors.factors)):
-        factor = factors.factors[factor_idx]
+    #now must scale the continuous factors and convert categorical factors to actual categories
+    fully_decoded_matrix_df = scaled_discrete_encoded_cont_matrix_df.copy()
+    for factor in factors.factors:
         name = factor[0]
-        if factor[2] == "Ordinal" or factor[2] == "Categorical":
-            encoded_matrix_df[name] = encoded_matrix_df[name].round()
-
-    #must decode the df_LHS_samples_encoded_copy
-    #encoded_matrix_df_copy = encoded_matrix_df.copy()
-    decoded_matrix_df = decode_matrix(encoded_matrix_df, factors)
-    
-    #return both decoded and encoded Pandas dataframes
-  
-    return decoded_matrix_df
+        levels = factor[1]
+        factor_type = factor[2]
+        if factor_type == "Continuous":
+            minimum = levels[0]
+            maximum = levels[1]
+            fully_decoded_matrix_df[name] = fully_decoded_matrix_df[name] * (maximum - minimum) + minimum
+        elif factor_type == "Categorical":
+            mapping = dict()
+            for idx in range(len(levels)):
+                mapping[float(idx)+1] = levels[idx]
+            fully_decoded_matrix_df[name] = fully_decoded_matrix_df[name].replace(mapping)
+   
+    #return decoded dataframe
+    return fully_decoded_matrix_df
 
 """
 Calculate the minimum pairwise Euclidean distance of a numpy matrix
