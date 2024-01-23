@@ -145,7 +145,7 @@ def latin_hypercube_design(factors, n):
     #if there are elements in discrete_factors_tracking, report the warning
     if len(discrete_factors_tracking) > 0:
         str_of_factors = ", ".join(discrete_factors_tracking)
-        warnings.warn("Using discrete factors whose levels are not the same as the number of runs will not result in a ture Latin Hypercube sampling design. The discrete factors with different numbers of levels compared to runs: " + str_of_factors)
+        warnings.warn("Using discrete factors whose levels are not the same as the number of runs will not result in a true Latin Hypercube sampling design. The discrete factors with different numbers of levels compared to runs: " + str_of_factors)
 
     num_dimensions = len(factors.factors)
     #call the library LHS function with the number of factors as the dimensions
