@@ -16,14 +16,13 @@ Returns the expected improvement of a range of points given a GP and a y_min val
 """
 def calculate_EI(potential_x, gp):
     y_min = np.min(gp.y_train_)
-    #will result in two numpy arrays
-    #mu will be a numpy array with length = number of points in potential_x
-    #sigma will be a numpy array with length = number of points in potential_x
+    print("y_min:",y_min)
     mu, sigma = gp.predict(potential_x, return_std=True)
-
+    print("mu:",mu)
     with np.errstate(divide='warn'):
-        #improvement will be a numpy array with length = number of points in potential_x
         improvement = y_min - mu
+        print("improvement:",improvement)
+        print("sigma:",sigma)
         Z = improvement / sigma
         ei = improvement * norm.cdf(Z) + sigma * norm.pdf(Z)
         ei[sigma == 0.0] = 0.0
@@ -282,7 +281,7 @@ def EI_heatmaps(gp,factors):
 
         # Reshape for plotting
         ei_values = ei_values.reshape(draw_angle_grid.shape)
-
+        print("ei_values:",ei_values)
         # Plotting the heatmap for GP standard deviation
         plt.figure()
         plt.imshow(ei_values, extent=[draw_angle_min_decoded, draw_angle_max_decoded, rubber_bands_min_decoded, rubber_bands_max_decoded],
