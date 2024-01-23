@@ -45,8 +45,10 @@ Suggests a next experiment to conduct based on type_of_plan.
 :param type_of_plan: string indicating whether to find experiments based on "Exploration" (uncertainty), "Exploitation" (lowest error value), "EI" (mix of both)
 :return: an array containing the encoded next best experiment to execute and the resulting objective value
 """
-def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts = 100):
+def plan_next_experiment(gp, factors, type_of_plan, random_restarts = 100):
 
+    #collect y responses
+    y_responses = gp.y_train_
     #retrieve the levels lists of the discrete factors
     levels_list = []
     for factor in factors.factors:
@@ -126,7 +128,6 @@ def plan_next_experiment(y_responses, factors, gp, type_of_plan, random_restarts
             
             #the objective function to give the minimize call, inputting y_min_responses found earlier and the gp
             def min_ei(continuous_input):
-                #TODO: make x into a pandas dataframe containing one point and appropriate column names
                 x_numpy = np.hstack((continuous_input,discrete_combo))
                 x_dataframe = pd.DataFrame([x_numpy],columns=factor_names)
                 return -EI(x_dataframe, y_min_responses, gp).ravel()
